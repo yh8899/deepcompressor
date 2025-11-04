@@ -11,9 +11,14 @@ import torch.nn as nn
 import torch.utils.data
 from diffusers.models.attention import JointTransformerBlock
 from diffusers.models.attention_processor import Attention
+from diffusers.models.transformers.transformer_flux import FluxAttention
 from diffusers.models.transformers.transformer_flux import (
     FluxSingleTransformerBlock,
     FluxTransformerBlock,
+)
+from diffusers.models.transformers.transformer_qwenimage import (
+    QwenImageTransformer2DModel,
+    QwenImageTransformerBlock,
 )
 from omniconfig import configclass
 
@@ -105,7 +110,7 @@ class DiffusionConcatCacheAction(ConcatCacheAction):
             cache (`TensorsCache`):
                 Cache.
         """
-        if isinstance(module, Attention):
+        if isinstance(module, Attention) or isinstance(module, FluxAttention):
             encoder_hidden_states = tensors.get("encoder_hidden_states", None)
             if encoder_hidden_states is None:
                 tensors.pop("encoder_hidden_states", None)
@@ -132,6 +137,36 @@ class DiffusionConcatCacheAction(ConcatCacheAction):
             else:
                 assert hidden_states_cache.channels_dim == channels_dim
         return super().info(name, module, tensors, cache)
+
+
+    def apply(
+        self,
+        name: str,
+        module: nn.Module,
+        tensors: dict[int | str, torch.Tensor],
+        cache: TensorsCache,
+    ) -> None:
+        """Concatenate cached activations along the sample dimension.
+
+        Args:
+            name (`str`):
+                Module name.
+            module (`nn.Module`):
+                Module.
+            tensors (`dict[int or str, torch.Tensor]`):
+                Tensors to cache.
+            cache (`TensorsCache`):
+                Cache.
+        """
+        for k, c in cache.tensors.items():
+            x = tensors[k]
+            shape, device = x.shape, self.device or x.device
+            num_prev_cached = c.num_cached
+            c.num_cached += shape[0]
+            # if num_prev_cached == 0:
+            #     assert len(c.data) == 0
+            #     c.data.append(torch.empty((c.num_total, *shape[1:]), dtype=x.dtype, device=device))
+            c.data.append(x)
 
 
 class DiffusionCalibCacheLoader(BaseCalibCacheLoader):
@@ -167,10 +202,21 @@ class DiffusionCalibCacheLoader(BaseCalibCacheLoader):
                 inputs=TensorsCache(
                     OrderedDict(
                         hidden_states=TensorCache(channels_dim=-1, reshape=LinearReshapeFn()),
+                        encoder_hidden_states=TensorCache(channels_dim=-1, reshape=LinearReshapeFn()),
                         temb=TensorCache(channels_dim=1, reshape=LinearReshapeFn()),
                     )
                 ),
                 outputs=TensorCache(channels_dim=-1, reshape=LinearReshapeFn()),
+            )
+        elif isinstance(module, FluxAttention):
+            return IOTensorsCache(
+                inputs=TensorsCache(
+                    OrderedDict(
+                        hidden_states=TensorCache(channels_dim=None, reshape=None),
+                        encoder_hidden_states=TensorCache(channels_dim=None, reshape=None),
+                    ),
+                ),
+                outputs=TensorCache(channels_dim=None, reshape=None),
             )
         elif isinstance(module, Attention):
             return IOTensorsCache(
@@ -219,7 +265,7 @@ class DiffusionCalibCacheLoader(BaseCalibCacheLoader):
             assert len(args) == 0, f"Invalid args: {args}"
         else:
             hidden_states = args[0]
-        if isinstance(m, (FluxTransformerBlock, JointTransformerBlock)):
+        if isinstance(m, (FluxTransformerBlock, JointTransformerBlock, FluxSingleTransformerBlock, QwenImageTransformerBlock)):
             if "encoder_hidden_states" in kwargs:
                 encoder_hidden_states = kwargs.pop("encoder_hidden_states")
             else:
@@ -249,7 +295,7 @@ class DiffusionCalibCacheLoader(BaseCalibCacheLoader):
             `dict[str | int, Any]`:
                 Dictionary for updating the next layer inputs.
         """
-        if isinstance(m, (FluxTransformerBlock, JointTransformerBlock)):
+        if isinstance(m, (FluxTransformerBlock, JointTransformerBlock, FluxSingleTransformerBlock, QwenImageTransformerBlock)):
             assert isinstance(outputs, tuple) and len(outputs) == 2
             encoder_hidden_states, hidden_states = outputs
             return {0: hidden_states.detach().cpu(), 1: encoder_hidden_states.detach().cpu()}

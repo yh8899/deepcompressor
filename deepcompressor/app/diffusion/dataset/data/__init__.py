@@ -63,7 +63,11 @@ def get_dataset(
         elif name == "DCI":
             dataset = datasets.load_dataset(path, return_gt=return_gt, **kwargs)
         elif name == "MJHQ":
-            dataset = datasets.load_dataset(path, return_gt=return_gt, **kwargs)
+            # dataset = datasets.load_dataset(path, return_gt=return_gt, **kwargs)
+            from .MJHQ.MJHQ import DCI
+            builder = DCI(return_gt=return_gt, max_dataset_size=max_dataset_size)
+            builder.download_and_prepare()
+            dataset = builder.as_dataset(split='train')
         else:
             raise ValueError(f"Unknown dataset name: {name}")
     assert not hasattr(dataset, "_unchunk_size")

@@ -1,10 +1,11 @@
 pipeline:
-  name: flux.1-schnell
+  name: Qwen-Image
   dtype: torch.bfloat16
 eval:
-  num_steps: 4
+  num_steps: 50
   guidance_scale: 0
   protocol: fmeuler{num_steps}-g{guidance_scale}
+  num_samples: 100
   benchmarks:
     - "MJHQ"
   gt_metrics:
@@ -13,7 +14,7 @@ eval:
     - fid
 quant:
   calib:
-    batch_size: 16
+    batch_size: 1
   wgts:
     calib_range:
       element_batch_size: 64
@@ -45,6 +46,8 @@ quant:
     - transformer_proj_out
     - transformer_norm
     - transformer_add_norm
+    - transformer_img_mod
+    - transformer_txt_mod
     - down_sample
     - up_sample
   opts:

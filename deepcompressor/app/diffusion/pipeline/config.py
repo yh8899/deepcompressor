@@ -12,6 +12,7 @@ from diffusers.pipelines import (
     FluxControlPipeline,
     FluxFillPipeline,
     SanaPipeline,
+    QwenImagePipeline,
 )
 from omniconfig import configclass
 from torch import nn
@@ -350,6 +351,9 @@ class DiffusionPipelineConfig:
             pipeline = FluxControlPipeline.from_pretrained(path, torch_dtype=dtype)
         elif name == "flux.1-fill-dev":
             pipeline = FluxFillPipeline.from_pretrained(path, torch_dtype=dtype)
+        elif name == "Qwen-Image":
+            pipeline = QwenImagePipeline.from_pretrained(path, torch_dtype=dtype)
+            # pipeline.enable_model_cpu_offload()
         elif name.startswith("sana-"):
             if dtype == torch.bfloat16:
                 pipeline = SanaPipeline.from_pretrained(path, variant="bf16", torch_dtype=dtype, use_safetensors=True)
@@ -359,7 +363,23 @@ class DiffusionPipelineConfig:
                 pipeline = SanaPipeline.from_pretrained(path, torch_dtype=dtype)
         else:
             pipeline = AutoPipelineForText2Image.from_pretrained(path, torch_dtype=dtype)
-        pipeline = pipeline.to(device)
+        if name in ["Qwen-Image"]:
+            # cpu offload
+            from diffusers.hooks import apply_group_offloading
+            onload_device = torch.device(f"cuda:{torch.cuda.current_device()}")
+            offload_device = torch.device("cpu")
+            apply_group_offloading(pipeline.text_encoder,
+                onload_device=onload_device,
+                offload_device=offload_device,
+                offload_type="leaf_level",
+                use_stream=True,
+                record_stream=False,
+            )
+            pipeline.transformer = pipeline.transformer.to(onload_device)
+            pipeline.vae = pipeline.vae.to(onload_device)
+        else:
+            # pipeline = pipeline.to(device)
+            pipeline.enable_model_cpu_offload()
         model = pipeline.unet if hasattr(pipeline, "unet") else pipeline.transformer
         replace_fused_linear_with_concat_linear(model)
         replace_up_block_conv_with_concat_conv(model)

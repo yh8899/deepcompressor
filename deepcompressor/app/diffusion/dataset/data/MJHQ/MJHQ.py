@@ -28,7 +28,7 @@ _LICENSE = (
     "(https://huggingface.co/playgroundai/playground-v2.5-1024px-aesthetic/blob/main/LICENSE.md)"
 )
 
-IMAGE_URL = "https://huggingface.co/datasets/playgroundai/MJHQ-30K/resolve/main/mjhq30k_imgs.zip"
+IMAGE_URL = "https://hf-mirror.com/datasets/playgroundai/MJHQ-30K/resolve/main/mjhq30k_imgs.zip"
 
 META_URL = "https://huggingface.co/datasets/playgroundai/MJHQ-30K/resolve/main/meta_data.json"
 
