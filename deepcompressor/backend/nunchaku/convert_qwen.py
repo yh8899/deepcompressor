@@ -80,7 +80,7 @@ def convert_to_nunchaku_w4x16_mod_state_dict(
     bias: torch.Tensor,
 ) -> dict[str, torch.Tensor]:
     weight, scale, zero, bias = convert_to_nunchaku_w4x16_linear_weight(
-        weight, scale=scale, bias=bias, adanorm_splits=1
+        weight, scale=scale, bias=bias, adanorm_splits=6
     )
     state_dict: dict[str, torch.Tensor] = {}
     state_dict = {}
