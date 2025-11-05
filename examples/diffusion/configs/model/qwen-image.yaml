@@ -24,6 +24,17 @@ quant:
     low_rank:
       sample_batch_size: 32
       sample_size: -1
+      skips:
+      - embed
+      - resblock
+      - transformer_proj_in
+      - transformer_proj_out
+      - transformer_norm
+      - transformer_add_norm
+      - transformer_img_mod
+      - transformer_txt_mod
+      - down_sample
+      - up_sample
     skips: 
     - embed
     - resblock_shortcut
@@ -62,6 +73,17 @@ quant:
       sample_batch_size: 32
       element_size: -1
       sample_size: -1
+      skips:
+      - embed
+      - resblock
+      - transformer_proj_in
+      - transformer_proj_out
+      - transformer_norm
+      - transformer_add_norm
+      - transformer_img_mod
+      - transformer_txt_mod
+      - down_sample
+      - up_sample
     attn:
       sample_batch_size: 32
       sample_size: -1

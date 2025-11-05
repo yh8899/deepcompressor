@@ -66,13 +66,29 @@ def convert_to_nunchaku_w4x4y16_linear_state_dict(
     if subscale is not None:
         state_dict[subscale_key] = subscale
     state_dict["bias"] = bias
-    state_dict["smooth_orig"] = smooth
-    state_dict["smooth"] = torch.ones_like(smooth) if smooth_fused else smooth.clone()
+    state_dict["smooth_factor_orig"] = smooth
+    state_dict["smooth_factor"] = torch.ones_like(smooth) if smooth_fused else smooth.clone()
     if lora is not None:
-        state_dict["lora_down"] = lora[0]
-        state_dict["lora_up"] = lora[1]
+        state_dict["proj_down"] = lora[0]
+        state_dict["proj_up"] = lora[1]
     return state_dict
 
+
+def convert_to_nunchaku_w4x16_mod_state_dict(
+    weight: torch.Tensor,
+    scale: torch.Tensor,
+    bias: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    weight, scale, zero, bias = convert_to_nunchaku_w4x16_linear_weight(
+        weight, scale=scale, bias=bias, adanorm_splits=1
+    )
+    state_dict: dict[str, torch.Tensor] = {}
+    state_dict = {}
+    state_dict["qweight"] = weight
+    state_dict["wscales"] = scale
+    state_dict["wzeros"] = zero
+    state_dict["bias"] = bias
+    return state_dict
 
 def convert_to_nunchaku_w4x16_adanorm_single_state_dict(
     weight: torch.Tensor,
@@ -177,18 +193,11 @@ def convert_to_nunchaku_transformer_block_state_dict(
                 print(f"  - Copying {block_name} biases of {candidate_local_names} as {converted_local_name}.bias")
                 converted[f"{converted_local_name}.bias"] = bias.clone().cpu()
             continue
-        if convert_map[converted_local_name] == "adanorm_single":
+        if convert_map[converted_local_name] == "mod":
             print(f"  - Converting {block_name} weights of {candidate_local_names} to {converted_local_name}.")
             update_state_dict(
                 converted,
-                convert_to_nunchaku_w4x16_adanorm_single_state_dict(weight=weight, scale=scale, bias=bias),
-                prefix=converted_local_name,
-            )
-        elif convert_map[converted_local_name] == "adanorm_zero":
-            print(f"  - Converting {block_name} weights of {candidate_local_names} to {converted_local_name}.")
-            update_state_dict(
-                converted,
-                convert_to_nunchaku_w4x16_adanorm_zero_state_dict(weight=weight, scale=scale, bias=bias),
+                convert_to_nunchaku_w4x16_mod_state_dict(weight=weight, scale=scale, bias=bias),
                 prefix=converted_local_name,
             )
         elif convert_map[converted_local_name] == "linear":
@@ -247,6 +256,10 @@ def convert_to_nunchaku_qwen_image_transformer_block_state_dict(
             "attn.add_qkv_proj": ["attn.add_q_proj", "attn.add_k_proj", "attn.add_v_proj"],
             "attn.to_out.0": "attn.to_out.0",
             "attn.to_add_out": "attn.to_add_out",
+            "attn.norm_q": "attn.norm_q",
+            "attn.norm_k": "attn.norm_k",
+            "attn.norm_added_q": "attn.norm_added_q",
+            "attn.norm_added_k": "attn.norm_added_k",
             "img_mlp.net.0.proj": "img_mlp.net.0.proj",
             "img_mlp.net.2": "img_mlp.net.2.linear",
             "txt_mlp.net.0.proj": "txt_mlp.net.0.proj",
@@ -263,8 +276,8 @@ def convert_to_nunchaku_qwen_image_transformer_block_state_dict(
             "img_mlp.net.2": "img_mlp.net.2.linear",
             "txt_mlp.net.0.proj": "txt_mlp.net.0.proj",
             "txt_mlp.net.2": "txt_mlp.net.2.linear",
-            "img_mod.1": "img_mod.1",
-            "txt_mod.1": "txt_mod.1",
+            # "img_mod.1": "img_mod.1",
+            # "txt_mod.1": "txt_mod.1",
         },
         branch_name_map={
             "attn.to_qkv": "attn.to_q",
@@ -275,8 +288,8 @@ def convert_to_nunchaku_qwen_image_transformer_block_state_dict(
             "img_mlp.net.2": "img_mlp.net.2.linear",
             "txt_mlp.net.0.proj": "txt_mlp.net.0.proj",
             "txt_mlp.net.2": "txt_mlp.net.2.linear",
-            "img_mod.1": "img_mod.1",
-            "txt_mod.1": "txt_mod.1",
+            # "img_mod.1": "img_mod.1",
+            # "txt_mod.1": "txt_mod.1",
         },
         convert_map={
             "attn.to_qkv": "linear",
@@ -287,8 +300,8 @@ def convert_to_nunchaku_qwen_image_transformer_block_state_dict(
             "img_mlp.net.2": "linear",
             "txt_mlp.net.0.proj": "linear",
             "txt_mlp.net.2": "linear",
-            "img_mod.1": "linear",
-            "txt_mod.1": "linear",
+            "img_mod.1": "mod",
+            "txt_mod.1": "mod",
         },
         float_point=float_point,
     )
